@@ -67,7 +67,8 @@ def query_main_website() -> list:
     html = urlopen(url).read()
     soup = BeautifulSoup(html, features="html.parser")
 
-    listings = {}
+    # return value if no listing section could be found
+    listing_urls = []
     id = ''
     zurich_variations = ('zurich', 'zürich', 'zuerich')
     winterthur_variations = ('winterthur', 'wädenswil', 'waedenswil')
@@ -94,14 +95,17 @@ def query_main_website() -> list:
                 id = button['data-gruppeid']
                 break
 
-    if id == '':
+    if id == "":
         print("Couldn't find the room buttons")
-        return listings
+        return listing_urls
 
     # This is the div which the button reveals
     div = soup.find('div', attrs={'id': f'GruppeID_{id}'})
+    if not div:
+        print("Couldn't locate listing container")
+        return listing_urls
 
-    listing_urls = []
+    # Extract individual listing URLs
     for link in div.find_all('a'):
         relative_room_url = link['href']
         room_url = urljoin(url, relative_room_url)
