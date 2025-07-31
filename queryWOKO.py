@@ -1,9 +1,8 @@
 from urllib.request import urlopen
 from urllib.parse import urljoin
-import ssl
-import smtplib
-import time
-import random
+from urllib.error import URLError
+import subprocess
+import os
 from bs4 import BeautifulSoup
 import yaml
 
@@ -12,35 +11,40 @@ with open("config.yaml", "r") as opened_file:
 
 
 def send_message(config, body=""):
-    """
-    Send email
-    :param body: the body of the email.
-    :param receiver_email:
-    :param sender_email:
-    :param password: The app-password of the email.
-    :return:
-    """
-    receiver_email = config.get('receiver_email')
-    sender_email = config.get('sender_email')
-    password = config.get('password')
+    """Send email using the local ``mail`` command."""
 
-    port = 587  # For starttls
-    smtp_server = "smtp.gmail.com"
-    message = f"Subject: You have a new post\n\n\n{body}\n---\n\n\nCheers,\nYour team"
-    context = ssl.create_default_context()
-    with smtplib.SMTP(smtp_server, port) as server:
-        server.ehlo()  # Can be omitted
-        server.starttls(context=context)
-        server.ehlo()  # Can be omitted
-        server.login(sender_email, password)
-        server.sendmail(sender_email, receiver_email, message.encode('utf-8'))
+    receiver_email = config.get("receiver_email")
+    sender_email = config.get("sender_email")
+    subject = "You have a new post"
+    message = f"{body}\n---\n\nCheers,\nYour team"
 
-    print('Message sent!')
+    try:
+        subprocess.run(
+            [
+                "mail",
+                "-s",
+                subject,
+                "-r",
+                sender_email,
+                receiver_email,
+            ],
+            input=message.encode("utf-8"),
+            check=True,
+        )
+    except Exception as exc:
+        print(f"Failed to send email: {exc}")
+        return
+
+    print("Message sent!")
 
 
 def query_room_website(url):
     print(f'Scraping {url}')
-    html = urlopen(url).read()
+    try:
+        html = urlopen(url).read()
+    except URLError as exc:
+        print(f'Failed to read {url}: {exc}')
+        return ""
     soup = BeautifulSoup(html, features="html.parser")
 
     body = ""
@@ -64,7 +68,11 @@ def query_main_website() -> list:
     :return: list of listings
     """
     url = config["url_woko"]
-    html = urlopen(url).read()
+    try:
+        html = urlopen(url).read()
+    except URLError as exc:
+        print(f'Failed to query main page: {exc}')
+        return []
     soup = BeautifulSoup(html, features="html.parser")
 
     listings = {}
@@ -110,41 +118,49 @@ def query_main_website() -> list:
     return listing_urls
 
 
-def sleep():
-    """
-    Sleep time
-    :return:
-    """
-    timer = config["timer"] * random.choice([1, 2])
-    print(f"Sleep for: {timer // 60}min.")
-    time.sleep(timer)
+def load_known_listings(path="known_listings.txt"):
+    if os.path.exists(path):
+        with open(path, "r") as fh:
+            return [line.strip() for line in fh if line.strip()]
+    return []
 
 
-listing_urls = query_main_website()
+def save_known_listings(urls, path="known_listings.txt"):
+    with open(path, "w") as fh:
+        for url in urls:
+            fh.write(f"{url}\n")
 
-if len(listing_urls) == 0:
-    print('No listings found')
+
+def main():
+    listing_urls = query_main_website()
+
+    if len(listing_urls) == 0:
+        print('No listings found')
+        if config['test_email']:
+            print('Cannot test without any listings, exiting')
+        return
+
     if config['test_email']:
-        print('Cannot test without any listings, exiting')
-        exit()
+        listing_urls.pop()
 
-if config['test_email']:
-    listing_urls.pop()
+    known = load_known_listings()
 
-while True:
-    next_listing_urls = query_main_website()
-
-    new_listing_urls = set(next_listing_urls) - set(listing_urls)
+    new_listing_urls = set(listing_urls) - set(known)
 
     if new_listing_urls:
         for new_listing_url in new_listing_urls:
-            send_message(
-                body=query_room_website(new_listing_url),
-                config=config,
-            )
-        print("Found!")
-        listing_urls = next_listing_urls
-        sleep()
+            body = query_room_website(new_listing_url)
+            if body:
+                send_message(
+                    body=body,
+                    config=config,
+                )
+        print("Found new listings!")
     else:
-        print(f"Still: {len(next_listing_urls)} rooms...")
-        sleep()
+        print(f"Still: {len(listing_urls)} rooms...")
+
+    save_known_listings(listing_urls)
+
+
+if __name__ == "__main__":
+    main()

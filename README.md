@@ -24,12 +24,11 @@ pip install -r requirements.txt
 
 ### 2. Fill out the config file
 
-Open and fill out the config.yaml file.
+Open and fill out the config.yaml file. The script uses the system `mail` command so no password is required.
 
 ```python
 receiver_email: "email@gmail.com" # email to send to
-sender_email: "email@gmail.com" # email to send from 
-password: "**** **** **** ****" # The app-password of the sender_email email
+sender_email: "email@gmail.com" # email to send from
 city: "Zürich" # Choose between Zürich and Winterthur (Winterthur includes Wädenswil listings)
 url_woko: "https://www.woko.ch/en/nachmieter-gesucht"  # Long-term listings
 #url_woko: "https://www.woko.ch/en/untermieter-gesucht"  # Short-term listings (sublets)
@@ -39,9 +38,7 @@ timer: 120 # in s./ interval to update request
 test_email: True  # once you test it to see if you are getting the emails, make this False!
 ```
 
-You can use the same **receiver_email** and **sender_email**.  
-Since May 30, 2022: You have to enable 2-step verification and set up an app password for this app, and set the config file so that this app is allowed to log in, else it will be considered a less secure app and Gmail won't allow it to log in. See this for more info: https://support.google.com/accounts/answer/6010255, https://support.google.com/accounts/answer/185833?hl=en.
-**The script doesn't store and share your privacy data!**
+You can use the same **receiver_email** and **sender_email**. Ensure the `mail` utility on your system is configured to send email. **The script doesn't store or share your privacy data!**
 
 You can choose the appropriate url_woko depending on the city and whether you want sublets or not. For eg, "https://www.woko.ch/en/nachmieter-gesucht" only contains long-term listings while "https://www.woko.ch/en/zimmer-in-zuerich" contains both.
 
@@ -49,14 +46,15 @@ You can choose the appropriate url_woko depending on the city and whether you wa
 
 Open your favourite command line tool (Terminal etc) and run the script as: 
 
-```python
+```bash
 python3 queryWOKO.py
 ```
 
-If everything is fine, you should see something like:
+To run periodically with cron (for example every 5 minutes) add a line to your `crontab`:
+
+```bash
+*/5 * * * * /usr/local/bin/python3 /path/to/queryWOKO.py
 ```
-Still: 2 rooms...
-Sleep for: 3min.
-```
-Leave the script running in the background. The script will update itself every 3 to 6 min and if a new room is available, it will notify you by email. Enjoy! \
-**Good luck!**
+
+The script remembers previously seen listings in `known_listings.txt` and only
+sends emails for new ones.
